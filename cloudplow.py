@@ -696,6 +696,27 @@ def do_plex_monitor():
 # SCHEDULED FUNCS
 ############################################################
 
+def inotify_uploader(uploader_name, uploader_settings):
+    try:
+        log.info(f"uploader_name: {uploader_name}")
+        source=conf.configs['remotes'][uploader_name]['upload_folder']
+        if path.check_file_operations(source):
+            log.info(f"{path.check_file_operations(source)} : {source} : {uploader_name}" )
+            # check suspended uploaders
+            if check_suspended_uploaders(uploader_name):
+                return
+
+            # clear any banned service accounts
+            check_suspended_sa(uploader_name)
+            # upload 
+            do_upload(uploader_name)
+        else:
+            return
+
+    except Exception:
+        log.exception(f"Unexpected exception occurred while processing inotify uploader {uploader_name}: ")
+
+
 def scheduled_uploader(uploader_name, uploader_settings):
     log.debug(f"Scheduled disk check triggered for uploader: {uploader_name}")
     try:
@@ -792,9 +813,13 @@ if __name__ == "__main__":
 
             # add uploaders to schedule
             for uploader, uploader_conf in conf.configs['uploader'].items():
-                schedule.every(uploader_conf['check_interval']).minutes.do(scheduled_uploader, uploader, uploader_conf)
-                log.info(f"Added {uploader} uploader to schedule, checking available disk space every {uploader_conf['check_interval']} minutes")
-
+                if str(uploader_conf['check_interval']).lower() == 'inotify':
+                    #schedule.every(1).seconds.do(inotify_uploader, uploader,uploader_conf)
+                    inotify_uploader(uploader,uploader_conf)
+                    log.info(f"Added {uploader} uploader to schedule, checking for directory changes with inotify")
+                else:
+                    schedule.every(uploader_conf['check_interval']).minutes.do(scheduled_uploader, uploader, uploader_conf)
+                    log.info(f"Added {uploader} uploader to schedule, checking available disk space every {uploader_conf['check_interval']} minutes")
             # add syncers to schedule
             init_syncers()
             for syncer_name, syncer_conf in conf.configs['syncer'].items():
