@@ -696,6 +696,12 @@ def do_plex_monitor():
 # SCHEDULED FUNCS
 ############################################################
 
+def inotify_uploader(uploader_name,uploader_settings,count):
+    source=conf.configs['remotes'][uploader_name]['upload_folder']
+    if path.check_file_operations(source):
+        do_upload(uploader_name)
+        do_hidden()
+
 def scheduled_uploader(uploader_name, uploader_settings):
     log.debug(f"Scheduled disk check triggered for uploader: {uploader_name}")
     try:
@@ -792,9 +798,14 @@ if __name__ == "__main__":
 
             # add uploaders to schedule
             for uploader, uploader_conf in conf.configs['uploader'].items():
-                schedule.every(uploader_conf['check_interval']).minutes.do(scheduled_uploader, uploader, uploader_conf)
-                log.info(f"Added {uploader} uploader to schedule, checking available disk space every {uploader_conf['check_interval']} minutes")
+                count=0
+                if uploader_conf['inotify']:
+                    schedule.every(1).seconds.do(inotify_uploader, uploader,uploader_conf,count)
+                    log.info ("Added %s uploader to schedule, checking for directory changes with inotify ",uploader)
 
+                else:
+                    schedule.every(uploader_conf['check_interval']).minutes.do(scheduled_uploader, uploader, uploader_conf,uploader_conf['inotify'])
+                    log.info("Added %s uploader to schedule, checking available disk space every %d minutes:inotify is %s ", uploader,uploader_conf['check_interval'],uploader_conf['Inotify'])
             # add syncers to schedule
             init_syncers()
             for syncer_name, syncer_conf in conf.configs['syncer'].items():
